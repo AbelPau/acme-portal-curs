@@ -33,6 +33,23 @@ describe('ACME Portal', () => {
     expect(res.body.ticketId).toMatch(/^T-/);
   });
 
+  test('dues invitacions simultànies amb el mateix email no creen dos tokens', async () => {
+    const email = `cursa-${Date.now()}@acme.test`;
+    const send = () => request(app).post('/api/invitations').set(auth).send({ email });
+    const [a, b] = await Promise.all([send(), send()]);
+
+    const statuses = [a.status, b.status].sort((x, y) => x - y);
+    expect(statuses).toEqual([201, 409]);
+
+    const created = a.status === 201 ? a : b;
+    expect(created.body.token).toMatch(/^inv_/);
+    expect(created.body.email).toBe(email);
+
+    const stored = await request(app).get(`/api/invitations/${encodeURIComponent(email)}`).set(auth);
+    expect(stored.status).toBe(200);
+    expect(stored.body.token).toBe(created.body.token);
+  });
+
   test('contacte amb urgent crea ticket', async () => {
     const res = await request(app)
       .post('/api/contact')
